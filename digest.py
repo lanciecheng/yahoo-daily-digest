@@ -63,7 +63,7 @@ messages = []
 
 with imaplib.IMAP4_SSL("imap.mail.yahoo.com", 993) as mailbox:
     mailbox.login(USER, PASSWORD)
-    mailbox.select("INBOX", readonly=True)
+    mailbox.select("INBOX", readonly=Falseprocessed_ids)
     status, data = mailbox.search(
         None, "SINCE", start.strftime("%d-%b-%Y")
     )
@@ -98,6 +98,7 @@ with imaplib.IMAP4_SSL("imap.mail.yahoo.com", 993) as mailbox:
             "score": priority(subject, body),
             "received": received
         })
+        processed_ids.append(message_id)
 
 important = sorted(
     [m for m in messages if m["score"] > 0],
@@ -143,5 +144,17 @@ outgoing.set_content(digest)
 with smtplib.SMTP_SSL("smtp.mail.yahoo.com", 465) as smtp:
     smtp.login(USER, PASSWORD)
     smtp.send_message(outgoing)
+# Mark included emails as read only after
+# the digest has been successfully sent.
 
+with imaplib.IMAP4_SSL("imap.mail.yahoo.com", 993) as mailbox:
+    mailbox.login(USER, PASSWORD)
+    mailbox.select("INBOX", readonly=False)
+
+    for message_id in processed_ids:
+        status, _ = mailbox.store(
+            message_id, "+FLAGS", r"(\Seen)"
+        )
+        if status != "OK":
+            print(f"Failed to mark message {message_id!r} as read")
 print(f"Digest sent successfully; {len(messages)} messages reviewed.")
